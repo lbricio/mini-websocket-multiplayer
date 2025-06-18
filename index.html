@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini Multiplayer Grid</title>
+    <style>
+        canvas {
+            background: #ddd;
+            display: block;
+            margin: 20px auto;
+            touch-action: none; /* Evita zoom por toque em mobile */
+        }
+
+        .joystick {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: grid;
+            grid-template-columns: 80px 80px 80px;
+            grid-template-rows: 80px 80px 80px;
+            gap: 20px;
+            touch-action: none;
+        }
+
+        .joystick button {
+            width: 80px;
+            height: 80px;
+            font-size: 28px;
+            border-radius: 12px;
+            border: none;
+            background-color: #f0f0f0;
+            user-select: none;
+        }
+
+        .joystick button:active {
+            background-color: #ccc;
+        }
+
+        .joystick button:disabled {
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+<canvas id="game" width="512" height="512"></canvas>
+
+<div class="joystick">
+    <button disabled></button>
+    <button id="up">↑</button>
+    <button disabled></button>
+    <button id="left">←</button>
+    <button disabled></button>
+    <button id="right">→</button>
+    <button disabled></button>
+    <button id="down">↓</button>
+    <button disabled></button>
+</div>
+
+<div style="width: 512px; margin: 20px auto;">
+    <div id="chatBox" style="height: 150px; overflow-y: auto; background: #f9f9f9; border: 1px solid #ccc; padding: 5px; font-family: monospace; font-size: 14px;"></div>
+    <input type="text" id="chatInput" placeholder="Digite sua mensagem e aperte Enter..." style="width: 100%; padding: 5px;">
+</div>
+
+<script>
+    const ws = new WebSocket('ws://192.168.0.239:8080/ws');
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    let players = [];
+    let moveInterval = null;
+	let myPlayerID = null;
+
+	
+
+	// Exibição de mensagens de chat recebidas
+	ws.onmessage = function(event) {
+		const msg = JSON.parse(event.data);
+
+		if (msg.type === 'init') {
+			myPlayerID = msg.id;
+		}
+
+		if (msg.type === 'state') {
+			players = msg.players.map(p => {
+				let existing = players.find(oldP => oldP.id === p.id);
+				return {
+					...p,
+					x_img: existing ? existing.x_img : p.x * 16,
+					y_img: existing ? existing.y_img : p.y * 16
+				};
+			});
+		}
+
+		if (msg.type === 'chat') {
+			const chatBox = document.getElementById('chatBox');
+			chatBox.innerHTML += `<div><strong>Jogador ${msg.id}:</strong> ${msg.text}</div>`;
+			chatBox.scrollTop = chatBox.scrollHeight;
+		}
+	};
+
+	// Envio de mensagens de chat ao pressionar Enter
+	document.getElementById('chatInput').addEventListener('keydown', function(event) {
+		if (event.key === 'Enter' && this.value.trim() !== '') {
+			ws.send(JSON.stringify({ type: 'chat', text: this.value.trim() }));
+			this.value = '';
+		}
+	});
+
+	let isMoving = false;
+
+	function sendMove(dir) {
+		if (isMoving) return;
+		isMoving = true;
+		ws.send(JSON.stringify({ type: 'move', dir: dir }));
+
+		// Aguarda tempo suficiente para o bloco terminar de mover
+		setTimeout(() => {
+			isMoving = false;
+		}, 50);
+	}
+
+    function startMoving(dir) {
+        if (moveInterval) return;
+        sendMove(dir);
+        moveInterval = setInterval(() => sendMove(dir), 50);
+    }
+
+    function stopMoving() {
+        clearInterval(moveInterval);
+        moveInterval = null;
+    }
+
+    // Eventos de toque e mouse nos botões
+    const directions = ["up", "down", "left", "right"];
+    directions.forEach(dir => {
+        const btn = document.getElementById(dir);
+        btn.addEventListener('mousedown', () => startMoving(dir));
+        btn.addEventListener('mouseup', stopMoving);
+        btn.addEventListener('mouseleave', stopMoving);
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startMoving(dir);
+        }, { passive: false });
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopMoving();
+        });
+        btn.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            stopMoving();
+        });
+    });
+
+    // Suporte para teclado (WASD)
+    document.addEventListener('keydown', function(event) {
+		if (document.activeElement.id === 'chatInput') return;
+
+        let dir = null;
+        if (event.key === 'w') dir = 'up';
+        if (event.key === 's') dir = 'down';
+        if (event.key === 'a') dir = 'left';
+        if (event.key === 'd') dir = 'right';
+        if (dir) sendMove(dir);
+    });
+
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+function updatePlayerPositions() {
+    for (let p of players) {
+        p.x_img = lerp(p.x_img, p.x * 16, 0.2);
+        p.y_img = lerp(p.y_img, p.y * 16, 0.2);
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    updatePlayerPositions();
+
+    for (let p of players) {
+        // Desenhar o bloco cinza transparente na posição real
+		if (false) {
+			ctx.fillStyle = 'rgba(128, 128, 128, 0.4)'; // cinza com 40% de opacidade
+			ctx.fillRect(p.x * 16, p.y * 16, 16, 16);
+		}
+
+        // Desenhar o bloco colorido interpolado
+        if (p.id === myPlayerID) {
+            ctx.fillStyle = 'blue';  // Cor para você mesmo
+        } else {
+            ctx.fillStyle = 'red';   // Cor para os outros
+        }
+        ctx.fillRect(p.x_img, p.y_img, 16, 16);
+        ctx.strokeStyle = 'gray';
+        ctx.strokeRect(p.x_img, p.y_img, 16, 16);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+    draw();
+</script>
+</body>
+</html>
