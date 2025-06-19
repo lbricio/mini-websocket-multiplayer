@@ -19,12 +19,19 @@ var (
 	}
 )
 
+const (
+	mapWidth  = 16
+	mapHeight = 16
+)
+
 type Player struct {
-	ID       int    `json:"id"`
-	X        int    `json:"x"`
-	Y        int    `json:"y"`
-	IsMoving bool   `json:"-"`
-	NextMove string `json:"-"`
+	ID             int    `json:"id"`
+	X              int    `json:"x"`
+	Y              int    `json:"y"`
+	Direction      string `json:"direction"`
+	CharacterIndex int    `json:"characterIndex"`
+	IsMoving       bool   `json:"-"`
+	NextMove       string `json:"-"`
 }
 
 func handleWS(w http.ResponseWriter, r *http.Request) {
@@ -36,11 +43,13 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 
 	playersMu.Lock()
 	player := &Player{
-		ID:       nextPlayerID,
-		X:        5,
-		Y:        5,
-		IsMoving: false,
-		NextMove: "",
+		ID:             nextPlayerID,
+		X:              5,
+		Y:              5,
+		Direction:      "down",
+		CharacterIndex: nextPlayerID % 8, // Para testes, simples round-robin
+		IsMoving:       false,
+		NextMove:       "",
 	}
 	players[conn] = player
 	nextPlayerID++
@@ -95,20 +104,34 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 
 func startMove(p *Player, dir string) {
 	p.IsMoving = true
+	p.Direction = dir
 
+	var dx, dy int
 	switch dir {
 	case "up":
-		p.Y--
+		dy = -1
 	case "down":
-		p.Y++
+		dy = 1
 	case "left":
-		p.X--
+		dx = -1
 	case "right":
-		p.X++
+		dx = 1
 	}
 
+	// Limitar dentro do mapa
+	newX := p.X + dx
+	newY := p.Y + dy
+
+	if newX >= 0 && newX < mapWidth && newY >= 0 && newY < mapHeight {
+		p.X = newX
+		p.Y = newY
+	}
+
+	// Tempo fixo por tile
+	const moveDuration = 100 * time.Millisecond
+
 	go func(p *Player) {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(moveDuration)
 
 		var next string
 		playersMu.Lock()

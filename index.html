@@ -62,145 +62,158 @@
 </div>
 
 <script>
-    const ws = new WebSocket('ws://192.168.0.239:8080/ws');
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
+const spriteSheet = new Image();
+spriteSheet.src = 'charset/sprite.png';
 
-    let players = [];
-    let moveInterval = null;
-	let myPlayerID = null;
+const frameWidth = 48;
+const frameHeight = 72;
+const framesPerAnim = 3;
+const directions = ["down", "left", "right", "up"];
+const charactersPerRow = 4;
 
-	
+const movementSpeed = 200;
+const animationStyle = [0,1,2,1];
 
-	// Exibição de mensagens de chat recebidas
-	ws.onmessage = function(event) {
-		const msg = JSON.parse(event.data);
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-		if (msg.type === 'init') {
-			myPlayerID = msg.id;
-		}
+let players = [];
+let myPlayerID = null;
 
-		if (msg.type === 'state') {
-			players = msg.players.map(p => {
-				let existing = players.find(oldP => oldP.id === p.id);
-				return {
-					...p,
-					x_img: existing ? existing.x_img : p.x * 16,
-					y_img: existing ? existing.y_img : p.y * 16
-				};
-			});
-		}
+const ws = new WebSocket('ws://192.168.0.239:8080/ws');
 
-		if (msg.type === 'chat') {
-			const chatBox = document.getElementById('chatBox');
-			chatBox.innerHTML += `<div><strong>Jogador ${msg.id}:</strong> ${msg.text}</div>`;
-			chatBox.scrollTop = chatBox.scrollHeight;
-		}
-	};
+ws.onmessage = function(event) {
+    const msg = JSON.parse(event.data);
 
-	// Envio de mensagens de chat ao pressionar Enter
-	document.getElementById('chatInput').addEventListener('keydown', function(event) {
-		if (event.key === 'Enter' && this.value.trim() !== '') {
-			ws.send(JSON.stringify({ type: 'chat', text: this.value.trim() }));
-			this.value = '';
-		}
-	});
-
-	let isMoving = false;
-
-	function sendMove(dir) {
-		if (isMoving) return;
-		isMoving = true;
-		ws.send(JSON.stringify({ type: 'move', dir: dir }));
-
-		// Aguarda tempo suficiente para o bloco terminar de mover
-		setTimeout(() => {
-			isMoving = false;
-		}, 50);
-	}
-
-    function startMoving(dir) {
-        if (moveInterval) return;
-        sendMove(dir);
-        moveInterval = setInterval(() => sendMove(dir), 50);
+    if (msg.type === 'init') {
+        myPlayerID = msg.id;
     }
 
-    function stopMoving() {
-        clearInterval(moveInterval);
-        moveInterval = null;
+    if (msg.type === 'state') {
+        players = msg.players.map(p => {
+            let existing = players.find(oldP => oldP.id === p.id);
+            return {
+                ...p,
+                x_img: existing ? existing.x_img : p.x * 32,
+                y_img: existing ? existing.y_img : p.y * 32,
+                animFrame: existing ? existing.animFrame : 0,
+                animTime: existing ? existing.animTime : 0
+            };
+        });
     }
 
-    // Eventos de toque e mouse nos botões
-    const directions = ["up", "down", "left", "right"];
-    directions.forEach(dir => {
-        const btn = document.getElementById(dir);
-        btn.addEventListener('mousedown', () => startMoving(dir));
-        btn.addEventListener('mouseup', stopMoving);
-        btn.addEventListener('mouseleave', stopMoving);
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            startMoving(dir);
-        }, { passive: false });
-        btn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            stopMoving();
-        });
-        btn.addEventListener('touchcancel', (e) => {
-            e.preventDefault();
-            stopMoving();
-        });
-    });
+    if (msg.type === 'chat') {
+        const chatBox = document.getElementById('chatBox');
+        chatBox.innerHTML += `<div><strong>Jogador ${msg.id}:</strong> ${msg.text}</div>`;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+};
 
-    // Suporte para teclado (WASD)
-    document.addEventListener('keydown', function(event) {
-		if (document.activeElement.id === 'chatInput') return;
+document.getElementById('chatInput').addEventListener('keydown', function(event) {
+    if (event.key === 'Enter' && this.value.trim() !== '') {
+        ws.send(JSON.stringify({ type: 'chat', text: this.value.trim() }));
+        this.value = '';
+    }
+});
 
-        let dir = null;
-        if (event.key === 'w') dir = 'up';
-        if (event.key === 's') dir = 'down';
-        if (event.key === 'a') dir = 'left';
-        if (event.key === 'd') dir = 'right';
-        if (dir) sendMove(dir);
-    });
+function sendMove(dir) {
+    ws.send(JSON.stringify({ type: 'move', dir: dir }));
+}
+
+const directionsInput = ["up", "down", "left", "right"];
+directionsInput.forEach(dir => {
+    const btn = document.getElementById(dir);
+    btn.addEventListener('mousedown', () => sendMove(dir));
+    btn.addEventListener('touchstart', e => { e.preventDefault(); sendMove(dir); }, { passive: false });
+});
+
+document.addEventListener('keydown', function(event) {
+    if (document.activeElement.id === 'chatInput') return;
+    if (event.key === 'w') sendMove('up');
+    if (event.key === 's') sendMove('down');
+    if (event.key === 'a') sendMove('left');
+    if (event.key === 'd') sendMove('right');
+});
 
 function lerp(a, b, t) {
     return a + (b - a) * t;
 }
 
-function updatePlayerPositions() {
+function updatePlayerPositions(deltaTime) {
     for (let p of players) {
-        p.x_img = lerp(p.x_img, p.x * 16, 0.2);
-        p.y_img = lerp(p.y_img, p.y * 16, 0.2);
+        const targetX = p.x * 32;
+        const targetY = p.y * 32;
+
+        const dx = targetX - p.x_img;
+        const dy = targetY - p.y_img;
+
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0.5) {
+            const maxStep = (movementSpeed * deltaTime) / 1000;  // deltaTime está em ms
+            const step = Math.min(distance, maxStep);
+            const ratio = step / distance;
+			
+            p.x_img += dx * ratio;
+            p.y_img += dy * ratio;
+        } else {
+            p.x_img = targetX;
+            p.y_img = targetY;
+        }
+    }
+}
+
+function isPlayerMoving(p) {
+    const targetX = p.x * 32;
+    const targetY = p.y * 32;
+    const dx = Math.abs(p.x_img - targetX);
+    const dy = Math.abs(p.y_img - targetY);
+    return dx > 1 || dy > 1;
+}
+
+function updateAnimations(deltaTime) {
+    for (let p of players) {
+        if (isPlayerMoving(p)) {
+            p.animTime = (p.animTime || 0) + deltaTime;
+            if (p.animTime >= 150) {
+                p.animTime = 0;
+                p.animFrame = animationStyle[(p.animFrame + 1) % framesPerAnim];
+            }
+        } else {
+            p.animFrame = 1;
+        }
     }
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    updatePlayerPositions();
+    const now = performance.now();
+    const deltaTime = now - (draw.lastTime || now);
+    draw.lastTime = now;
+
+    updatePlayerPositions(deltaTime);
+    updateAnimations(deltaTime);
 
     for (let p of players) {
-        // Desenhar o bloco cinza transparente na posição real
-		if (false) {
-			ctx.fillStyle = 'rgba(128, 128, 128, 0.4)'; // cinza com 40% de opacidade
-			ctx.fillRect(p.x * 16, p.y * 16, 16, 16);
-		}
+        const dirIndex = directions.indexOf(p.direction || 'down');
+        const charCol = p.characterIndex % charactersPerRow;
+        const charRow = Math.floor(p.characterIndex / charactersPerRow);
 
-        // Desenhar o bloco colorido interpolado
-        if (p.id === myPlayerID) {
-            ctx.fillStyle = 'blue';  // Cor para você mesmo
-        } else {
-            ctx.fillStyle = 'red';   // Cor para os outros
-        }
-        ctx.fillRect(p.x_img, p.y_img, 16, 16);
-        ctx.strokeStyle = 'gray';
-        ctx.strokeRect(p.x_img, p.y_img, 16, 16);
+        const sx = charCol * framesPerAnim * frameWidth + (p.animFrame % framesPerAnim) * frameWidth;
+        const sy = charRow * directions.length * frameHeight + dirIndex * frameHeight;
+
+        ctx.drawImage(
+            spriteSheet,
+            sx, sy, frameWidth, frameHeight,
+            p.x_img, p.y_img, frameWidth, frameHeight
+        );
     }
 
     requestAnimationFrame(draw);
 }
 
-    draw();
+draw();
 </script>
 </body>
 </html>
