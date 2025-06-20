@@ -71,7 +71,7 @@ const framesPerAnim = 3;
 const directions = ["down", "left", "right", "up"];
 const charactersPerRow = 4;
 
-const movementSpeed = 200;
+const movementSpeed = 300;
 const animationStyle = [0,1,2,1];
 
 const canvas = document.getElementById('game');
@@ -127,13 +127,25 @@ directionsInput.forEach(dir => {
     btn.addEventListener('touchstart', e => { e.preventDefault(); sendMove(dir); }, { passive: false });
 });
 
+
+const keysPressed = {};
+
 document.addEventListener('keydown', function(event) {
     if (document.activeElement.id === 'chatInput') return;
-    if (event.key === 'w') sendMove('up');
-    if (event.key === 's') sendMove('down');
-    if (event.key === 'a') sendMove('left');
-    if (event.key === 'd') sendMove('right');
+    keysPressed[event.key] = true;
 });
+
+document.addEventListener('keyup', function(event) {
+    keysPressed[event.key] = false;
+});
+
+setInterval(function() {
+    if (keysPressed['w']) sendMove('up');
+    if (keysPressed['s']) sendMove('down');
+    if (keysPressed['a']) sendMove('left');
+    if (keysPressed['d']) sendMove('right');
+}, 50);
+
 
 function lerp(a, b, t) {
     return a + (b - a) * t;
@@ -153,7 +165,6 @@ function updatePlayerPositions(deltaTime) {
             const maxStep = (movementSpeed * deltaTime) / 1000;  // deltaTime está em ms
             const step = Math.min(distance, maxStep);
             const ratio = step / distance;
-			
             p.x_img += dx * ratio;
             p.y_img += dy * ratio;
         } else {
@@ -168,7 +179,7 @@ function isPlayerMoving(p) {
     const targetY = p.y * 32;
     const dx = Math.abs(p.x_img - targetX);
     const dy = Math.abs(p.y_img - targetY);
-    return dx > 1 || dy > 1;
+    return dx > 0.1 || dy > 0.1;
 }
 
 function updateAnimations(deltaTime) {
