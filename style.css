@@ -1,0 +1,116 @@
+@font-face {
+	font-family: 'PixelMplus';
+	src: url('https://cdn.jsdelivr.net/gh/jeff-hykin/better-fonts@latest/fonts/pixel-mplus/PixelMplus12-Regular.woff2') format('woff2');
+	font-weight: normal;
+	font-style: normal;
+}
+
+body, #chatInput, .joystick button, .action-buttons button {
+	font-family: 'PixelMplus', monospace;
+	font-size: 12px;
+}
+
+canvas {
+	background: #ddd;
+	display: block;
+	margin: 0; /* remover margin: auto */
+	touch-action: none;
+	image-rendering: pixelated;
+	transform-origin: top center; /* ou 'top center' no JS */
+}
+
+.joystick {
+	position: relative;
+	display: grid;
+	grid-template-columns: 60px 60px 60px;
+	grid-template-rows: 60px 60px 60px;
+	gap: 10px;
+	justify-content: center;
+	touch-action: none;
+	pointer-events: auto;
+	opacity: 0.6;
+}
+
+.joystick button {
+	width: 60px;
+	height: 60px;
+	font-size: 24px;
+	border-radius: 12px;
+	border: none;
+	background-color: #f0f0f0;
+	user-select: none;
+}
+
+.joystick button:active {
+	background-color: #ccc;
+}
+
+.joystick button:disabled {
+	visibility: hidden;
+}
+
+.joystick-overlay {
+	position: absolute;
+	bottom: 10px;
+	left: 10px;
+	pointer-events: none;
+}
+
+.action-buttons-overlay {
+	position: absolute;
+	bottom: 10px;
+	right: 10px;
+	pointer-events: none;
+}
+
+.action-buttons {
+	display: grid;
+	grid-template-columns: 60px 60px;
+	gap: 10px;
+	pointer-events: auto;
+	opacity: 0.6;
+}
+
+.action-buttons button {
+	width: 60px;
+	height: 60px;
+	font-size: 18px;
+	border-radius: 12px;
+	border: none;
+	background-color: #e0e0e0;
+	user-select: none;
+}
+
+.action-buttons button:active {
+	background-color: #bbb;
+}
+
+#chatInput {
+	position: fixed;
+	bottom: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 520px;
+	max-width: 100%;
+	padding: 6px 10px;
+	box-sizing: border-box;
+	border: none;
+	outline: none;
+	font-family: 'PixelFont', monospace;
+	font-size: 16px;
+	background-color: rgba(100, 100, 100, 0.85); /* cinza com transparência */
+	color: white;
+	border-radius: 10px;
+	z-index: 1000;
+}
+#chatInput::placeholder {
+	color: rgba(255, 255, 255, 0.7); /* branco semi-transparente */
+}
+
+#gameContainer {
+	display: flex;
+	justify-content: center;
+	position: relative;
+	top: 0;
+	margin: 0 auto; /* opcional */
+}

@@ -3,87 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>Mini Multiplayer Grid</title>
-    <style>
-        canvas {
-            background: #ddd;
-            display: block;
-            margin: 20px auto;
-            touch-action: none;
-        }
-
-        .joystick {
-            position: relative;
-            display: grid;
-            grid-template-columns: 60px 60px 60px;
-            grid-template-rows: 60px 60px 60px;
-            gap: 10px;
-            justify-content: center;
-            touch-action: none;
-            pointer-events: auto;
-            opacity: 0.6;
-        }
-
-        .joystick button {
-            width: 60px;
-            height: 60px;
-            font-size: 24px;
-            border-radius: 12px;
-            border: none;
-            background-color: #f0f0f0;
-            user-select: none;
-        }
-
-        .joystick button:active {
-            background-color: #ccc;
-        }
-
-        .joystick button:disabled {
-            visibility: hidden;
-        }
-
-        .joystick-overlay {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            pointer-events: none;
-        }
-
-        .action-buttons-overlay {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            pointer-events: none;
-        }
-
-        .action-buttons {
-            display: grid;
-            grid-template-columns: 60px 60px;
-            gap: 10px;
-            pointer-events: auto;
-            opacity: 0.6;
-        }
-
-        .action-buttons button {
-            width: 60px;
-            height: 60px;
-            font-size: 18px;
-            border-radius: 12px;
-            border: none;
-            background-color: #e0e0e0;
-            user-select: none;
-        }
-
-        .action-buttons button:active {
-            background-color: #bbb;
-        }
-        
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="gameContainer" style="width: 768px; margin: 0 auto;">
-    <canvas id="game" width="768" height="512"></canvas>
-    <input type="text" id="chatInput" placeholder="Digite sua mensagem e aperte Enter..." 
-           style="width: 100%; padding: 6px; box-sizing: border-box; border: none; outline: none; font-family: 'PixelFont', monospace; font-size: 16px;"/>
+    <!-- <canvas id="game" width="1280" height="720"></canvas> -->
+    <canvas id="game" width="1024" height="640"></canvas>
+    <!-- <canvas id="game" width="768" height="432"></canvas> -->
+    <input type="text" id="chatInput" placeholder="Digite sua mensagem e aperte Enter...">
 </div>
 <!-- Joystick no canto inferior esquerdo -->
 <div class="joystick-overlay">
@@ -110,8 +37,6 @@
     </div>
 </div>
 
-
-
 <script>
 
 const spriteSheet = new Image();
@@ -128,6 +53,24 @@ const animationStyle = [0,1,2,1];
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+    const canvas = document.getElementById('game');
+
+    const scaleX = window.innerWidth / canvas.width;
+    const scaleY = window.innerHeight / canvas.height;
+    const scale = Math.min(scaleX, scaleY, 1);
+
+    canvas.style.transform = `scale(${scale})`;
+    canvas.style.transformOrigin = 'top center';
+
+    // Remove o ajuste da largura do container para deixar o flex funcionar corretamente
+    // container.style.width = `${canvas.width * scale}px`;
+    // container.style.height = `${canvas.height * scale}px`;
+}
+
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('load', resizeCanvas);
 
 let players = [];
 let myPlayerID = null;
@@ -281,10 +224,15 @@ function draw() {
             p.x_img, p.y_img, frameWidth, frameHeight
         );
 
-        // Desenhar até 5 mensagens empilhadas
+        // Desenhar mensagens no balão com antialiasing melhorado
         if (p.chatMessages && p.chatMessages.length > 0) {
-            const messages = p.chatMessages.slice(-3); // últimas 5 mensagens
+            const messages = p.chatMessages.slice(-3); // últimas 3 mensagens
             let yOffset = 0;
+
+            // Configurações de fonte e alinhamento para texto mais nítido
+            ctx.font = "14px 'PixelMplus'";
+            ctx.textBaseline = "middle";
+            ctx.textAlign = "center";
 
             for (let i = messages.length - 1; i >= 0; i--) {
                 const msg = messages[i];
@@ -300,22 +248,22 @@ function draw() {
                 ctx.save();
                 ctx.globalAlpha = opacity;
 
-                ctx.font = "14px sans-serif";
                 const text = msg.text;
                 const textWidth = ctx.measureText(text).width;
 
-                const x = p.x_img + frameWidth / 2;
-                const y = p.y_img - 10 - yOffset;
+                // Posicionamento arredondado para melhor nitidez
+                const x = Math.round(p.x_img + frameWidth / 2);
+                const y = Math.round(p.y_img - 10 - yOffset);
 
-                // Fundo arredondado da mensagem
+                // Fundo arredondado do balão
                 ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
                 ctx.beginPath();
-                ctx.roundRect(x - textWidth / 2 - 6, y - 20, textWidth + 12, 20, 6);
+                ctx.roundRect(x - textWidth / 2 - 6, y - 10, textWidth + 12, 20, 6);
                 ctx.fill();
 
                 // Texto da mensagem
                 ctx.fillStyle = "white";
-                ctx.fillText(text, x - textWidth / 2, y - 5);
+                ctx.fillText(text, x, y);
 
                 ctx.restore();
 
