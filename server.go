@@ -20,18 +20,24 @@ var (
 )
 
 const (
-	mapWidth  = 16
+	mapWidth  = 24
 	mapHeight = 16
 )
 
+type ChatMessage struct {
+	Text      string `json:"text"`
+	Timestamp int64  `json:"timestamp"` // Unix milli
+}
+
 type Player struct {
-	ID             int    `json:"id"`
-	X              int    `json:"x"`
-	Y              int    `json:"y"`
-	Direction      string `json:"direction"`
-	CharacterIndex int    `json:"characterIndex"`
-	IsMoving       bool   `json:"-"`
-	NextMove       string `json:"-"`
+	ID             int           `json:"id"`
+	X              int           `json:"x"`
+	Y              int           `json:"y"`
+	Direction      string        `json:"direction"`
+	CharacterIndex int           `json:"characterIndex"`
+	IsMoving       bool          `json:"-"`
+	NextMove       string        `json:"-"`
+	ChatMessages   []ChatMessage `json:"chatMessages"`
 }
 
 func handleWS(w http.ResponseWriter, r *http.Request) {
@@ -88,10 +94,17 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 			if ok {
 				playersMu.Lock()
 				sender, exists := players[conn]
-				playersMu.Unlock()
 				if exists {
-					broadcastChat(sender.ID, text)
+					msg := ChatMessage{
+						Text:      text,
+						Timestamp: time.Now().UnixMilli(),
+					}
+					sender.ChatMessages = append(sender.ChatMessages, msg)
+					if len(sender.ChatMessages) > 3 {
+						sender.ChatMessages = sender.ChatMessages[1:] // remove o mais antigo
+					}
 				}
+				playersMu.Unlock()
 			}
 		}
 	}
@@ -159,8 +172,19 @@ func broadcastLoop() {
 }
 
 func broadcastState() {
+	now := time.Now().UnixMilli()
 	playersMu.Lock()
-	defer playersMu.Unlock()
+	for _, p := range players {
+		// Remove mensagens com mais de 15 segundos
+		filtered := p.ChatMessages[:0]
+		for _, m := range p.ChatMessages {
+			if now-m.Timestamp <= 15_000 {
+				filtered = append(filtered, m)
+			}
+		}
+		p.ChatMessages = filtered
+	}
+	playersMu.Unlock()
 
 	var playerList []Player
 	for _, p := range players {

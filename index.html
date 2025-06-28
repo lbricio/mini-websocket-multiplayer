@@ -8,24 +8,25 @@
             background: #ddd;
             display: block;
             margin: 20px auto;
-            touch-action: none; /* Evita zoom por toque em mobile */
-        }
-
-        .joystick {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            display: grid;
-            grid-template-columns: 80px 80px 80px;
-            grid-template-rows: 80px 80px 80px;
-            gap: 20px;
             touch-action: none;
         }
 
+        .joystick {
+            position: relative;
+            display: grid;
+            grid-template-columns: 60px 60px 60px;
+            grid-template-rows: 60px 60px 60px;
+            gap: 10px;
+            justify-content: center;
+            touch-action: none;
+            pointer-events: auto;
+            opacity: 0.6;
+        }
+
         .joystick button {
-            width: 80px;
-            height: 80px;
-            font-size: 28px;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
             border-radius: 12px;
             border: none;
             background-color: #f0f0f0;
@@ -39,29 +40,80 @@
         .joystick button:disabled {
             visibility: hidden;
         }
+
+        .joystick-overlay {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            pointer-events: none;
+        }
+
+        .action-buttons-overlay {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            pointer-events: none;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 60px 60px;
+            gap: 10px;
+            pointer-events: auto;
+            opacity: 0.6;
+        }
+
+        .action-buttons button {
+            width: 60px;
+            height: 60px;
+            font-size: 18px;
+            border-radius: 12px;
+            border: none;
+            background-color: #e0e0e0;
+            user-select: none;
+        }
+
+        .action-buttons button:active {
+            background-color: #bbb;
+        }
+        
     </style>
 </head>
 <body>
-<canvas id="game" width="512" height="512"></canvas>
-
-<div class="joystick">
-    <button disabled></button>
-    <button id="up">↑</button>
-    <button disabled></button>
-    <button id="left">←</button>
-    <button disabled></button>
-    <button id="right">→</button>
-    <button disabled></button>
-    <button id="down">↓</button>
-    <button disabled></button>
+<div id="gameContainer" style="width: 768px; margin: 0 auto;">
+    <canvas id="game" width="768" height="512"></canvas>
+    <input type="text" id="chatInput" placeholder="Digite sua mensagem e aperte Enter..." 
+           style="width: 100%; padding: 6px; box-sizing: border-box; border: none; outline: none; font-family: 'PixelFont', monospace; font-size: 16px;"/>
+</div>
+<!-- Joystick no canto inferior esquerdo -->
+<div class="joystick-overlay">
+    <div class="joystick">
+        <button disabled></button>
+        <button id="up">↑</button>
+        <button disabled></button>
+        <button id="left">←</button>
+        <button disabled></button>
+        <button id="right">→</button>
+        <button disabled></button>
+        <button id="down">↓</button>
+        <button disabled></button>
+    </div>
 </div>
 
-<div style="width: 512px; margin: 20px auto;">
-    <div id="chatBox" style="height: 150px; overflow-y: auto; background: #f9f9f9; border: 1px solid #ccc; padding: 5px; font-family: monospace; font-size: 14px;"></div>
-    <input type="text" id="chatInput" placeholder="Digite sua mensagem e aperte Enter..." style="width: 100%; padding: 5px;">
+<!-- Botões de ação no canto inferior direito -->
+<div class="action-buttons-overlay">
+    <div class="action-buttons">
+        <button id="btn-z">Z</button>
+        <button id="btn-x">X</button>
+        <button id="btn-c">C</button>
+        <button id="btn-esc">ESC</button>
+    </div>
 </div>
+
+
 
 <script>
+
 const spriteSheet = new Image();
 spriteSheet.src = 'charset/sprite.png';
 
@@ -80,7 +132,7 @@ const ctx = canvas.getContext('2d');
 let players = [];
 let myPlayerID = null;
 
-const ws = new WebSocket('ws://192.168.0.239:8080/ws');
+const ws = new WebSocket('ws://192.168.1.38:8080/ws');
 
 ws.onmessage = function(event) {
     const msg = JSON.parse(event.data);
@@ -97,15 +149,24 @@ ws.onmessage = function(event) {
                 x_img: existing ? existing.x_img : p.x * 32,
                 y_img: existing ? existing.y_img : p.y * 32,
                 animFrame: existing ? existing.animFrame : 0,
-                animTime: existing ? existing.animTime : 0
+                animTime: existing ? existing.animTime : 0,
+                chatTimestamp: existing?.chatText !== p.chatText ? performance.now() : existing?.chatTimestamp || 0
             };
         });
     }
 
     if (msg.type === 'chat') {
-        const chatBox = document.getElementById('chatBox');
-        chatBox.innerHTML += `<div><strong>Jogador ${msg.id}:</strong> ${msg.text}</div>`;
-        chatBox.scrollTop = chatBox.scrollHeight;
+        const sender = players.find(p => p.id === msg.id);
+        if (sender) {
+            sender.chatText = msg.text;
+
+            // Remover texto após 10 segundos
+            setTimeout(() => {
+                if (sender.chatText === msg.text) {
+                    sender.chatText = '';
+                }
+            }, 15000);
+        }
     }
 };
 
@@ -132,11 +193,11 @@ const keysPressed = {};
 
 document.addEventListener('keydown', function(event) {
     if (document.activeElement.id === 'chatInput') return;
-    keysPressed[event.key] = true;
+    keysPressed[event.key.toLowerCase()] = true;
 });
 
 document.addEventListener('keyup', function(event) {
-    keysPressed[event.key] = false;
+    keysPressed[event.key.toLowerCase()] = false;
 });
 
 setInterval(function() {
@@ -199,7 +260,7 @@ function updateAnimations(deltaTime) {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const now = performance.now();
+    const now = Date.now();
     const deltaTime = now - (draw.lastTime || now);
     draw.lastTime = now;
 
@@ -219,6 +280,48 @@ function draw() {
             sx, sy, frameWidth, frameHeight,
             p.x_img, p.y_img, frameWidth, frameHeight
         );
+
+        // Desenhar até 5 mensagens empilhadas
+        if (p.chatMessages && p.chatMessages.length > 0) {
+            const messages = p.chatMessages.slice(-3); // últimas 5 mensagens
+            let yOffset = 0;
+
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const msg = messages[i];
+                const elapsed = now - msg.timestamp;
+
+                if (elapsed >= 15000) continue; // Ignora mensagens expiradas
+
+                let opacity = 1;
+                if (elapsed > 10000) {
+                    opacity = 1 - ((elapsed - 10000) / 5000);
+                }
+
+                ctx.save();
+                ctx.globalAlpha = opacity;
+
+                ctx.font = "14px sans-serif";
+                const text = msg.text;
+                const textWidth = ctx.measureText(text).width;
+
+                const x = p.x_img + frameWidth / 2;
+                const y = p.y_img - 10 - yOffset;
+
+                // Fundo arredondado da mensagem
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.beginPath();
+                ctx.roundRect(x - textWidth / 2 - 6, y - 20, textWidth + 12, 20, 6);
+                ctx.fill();
+
+                // Texto da mensagem
+                ctx.fillStyle = "white";
+                ctx.fillText(text, x - textWidth / 2, y - 5);
+
+                ctx.restore();
+
+                yOffset += 20;
+            }
+        }
     }
 
     requestAnimationFrame(draw);
