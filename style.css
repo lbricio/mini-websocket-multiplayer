@@ -16,6 +16,7 @@ canvas {
 	margin: 0; /* remover margin: auto */
 	touch-action: none;
 	image-rendering: pixelated;
+	image-rendering: crisp-edges;
 	transform-origin: top center; /* ou 'top center' no JS */
 }
 

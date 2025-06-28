@@ -6,7 +6,7 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="gameContainer" style="width: 768px; margin: 0 auto;">
+<div id="gameContainer" style="width: 1024px; margin: 0 auto;">
     <!-- <canvas id="game" width="1280" height="720"></canvas> -->
     <canvas id="game" width="1024" height="640"></canvas>
     <!-- <canvas id="game" width="768" height="432"></canvas> -->
@@ -38,6 +38,49 @@
 </div>
 
 <script>
+const tileset = new Image();
+let tileSize = 32;
+
+fetch("maps/test.json")
+    .then(res => res.json())
+    .then(json => {
+        tileMapData = json;
+        tileset.src = tileMapData.tileset;
+    });
+
+function drawMap(cameraX, cameraY) {
+    if (!tileMapData) return;
+    if (!tileset.complete) return;
+
+    const layer = tileMapData.layers.find(l => l.name === "ground");
+
+    const cols = tileMapData.width;
+    const rows = tileMapData.height;
+
+    const tilesPerRow = tileset.width / tileSize;
+
+    const scaledTileW = canvas.width / tilesOnScreenX;
+    const scaledTileH = canvas.height / tilesOnScreenY;
+
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            const i = y * cols + x;
+            const tileIndex = layer.data[i];
+
+            const sx = (tileIndex % tilesPerRow) * tileSize;
+            const sy = Math.floor(tileIndex / tilesPerRow) * tileSize;
+
+            const dx = x * scaledTileW - cameraX;
+            const dy = y * scaledTileH - cameraY;
+
+            ctx.drawImage(
+                tileset,
+                sx, sy, tileSize, tileSize,         // fonte (tileset)
+                dx, dy, scaledTileW, scaledTileH    // destino (canvas)
+            );
+        }
+    }
+}
 
 const spriteSheet = new Image();
 spriteSheet.src = 'charset/sprite.png';
@@ -48,11 +91,16 @@ const framesPerAnim = 3;
 const directions = ["down", "left", "right", "up"];
 const charactersPerRow = 4;
 
+const tilesOnScreenX = 24;
+const tilesOnScreenY = 15;
+
 const movementSpeed = 300;
 const animationStyle = [0,1,2,1];
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
+let tileMapData = null;
 
 function resizeCanvas() {
     const canvas = document.getElementById('game');
@@ -89,8 +137,8 @@ ws.onmessage = function(event) {
             let existing = players.find(oldP => oldP.id === p.id);
             return {
                 ...p,
-                x_img: existing ? existing.x_img : p.x * 32,
-                y_img: existing ? existing.y_img : p.y * 32,
+                x_img: existing ? existing.x_img : p.x * tileSize,
+                y_img: existing ? existing.y_img : p.y * tileSize,
                 animFrame: existing ? existing.animFrame : 0,
                 animTime: existing ? existing.animTime : 0,
                 chatTimestamp: existing?.chatText !== p.chatText ? performance.now() : existing?.chatTimestamp || 0
@@ -157,8 +205,8 @@ function lerp(a, b, t) {
 
 function updatePlayerPositions(deltaTime) {
     for (let p of players) {
-        const targetX = p.x * 32;
-        const targetY = p.y * 32;
+        const targetX = p.x * tileSize;
+        const targetY = p.y * tileSize;
 
         const dx = targetX - p.x_img;
         const dy = targetY - p.y_img;
@@ -179,8 +227,8 @@ function updatePlayerPositions(deltaTime) {
 }
 
 function isPlayerMoving(p) {
-    const targetX = p.x * 32;
-    const targetY = p.y * 32;
+    const targetX = p.x * tileSize;
+    const targetY = p.y * tileSize;
     const dx = Math.abs(p.x_img - targetX);
     const dy = Math.abs(p.y_img - targetY);
     return dx > 0.1 || dy > 0.1;
@@ -210,6 +258,29 @@ function draw() {
     updatePlayerPositions(deltaTime);
     updateAnimations(deltaTime);
 
+    let myPlayer = players.find(p => p.id === myPlayerID);
+    let cameraX = 0, cameraY = 0;
+
+    // Escala baseada na quantidade de tiles visíveis
+    const scaledTileW = canvas.width / tilesOnScreenX;
+    const scaledTileH = canvas.height / tilesOnScreenY;
+
+    const scaleX = scaledTileW / tileSize;
+    const scaleY = scaledTileH / tileSize;
+
+    if (myPlayer) {
+        cameraX = myPlayer.x_img * scaleX + scaledTileW / 2 - canvas.width / 2;
+        cameraY = myPlayer.y_img * scaleY + scaledTileH / 2 - canvas.height / 2;
+
+        const maxCameraX = tileMapData.width * scaledTileW - canvas.width;
+        const maxCameraY = tileMapData.height * scaledTileH - canvas.height;
+
+        cameraX = Math.max(0, Math.min(cameraX, maxCameraX));
+        cameraY = Math.max(0, Math.min(cameraY, maxCameraY));
+    }
+
+    drawMap(cameraX, cameraY);
+
     for (let p of players) {
         const dirIndex = directions.indexOf(p.direction || 'down');
         const charCol = p.characterIndex % charactersPerRow;
@@ -218,18 +289,24 @@ function draw() {
         const sx = charCol * framesPerAnim * frameWidth + (p.animFrame % framesPerAnim) * frameWidth;
         const sy = charRow * directions.length * frameHeight + dirIndex * frameHeight;
 
+        // Aplica escala aos personagens
+        const destW = frameWidth * scaleX;
+        const destH = frameHeight * scaleY;
+
+        const dx = Math.round(p.x_img * scaleX - cameraX);
+        const dy = Math.round(p.y_img * scaleY - cameraY - (destH - scaledTileH));
+
         ctx.drawImage(
             spriteSheet,
             sx, sy, frameWidth, frameHeight,
-            p.x_img, p.y_img, frameWidth, frameHeight
+            dx, dy, destW, destH
         );
 
-        // Desenhar mensagens no balão com antialiasing melhorado
+        // Desenhar mensagens no balão
         if (p.chatMessages && p.chatMessages.length > 0) {
-            const messages = p.chatMessages.slice(-3); // últimas 3 mensagens
+            const messages = p.chatMessages.slice(-3);
             let yOffset = 0;
 
-            // Configurações de fonte e alinhamento para texto mais nítido
             ctx.font = "14px 'PixelMplus'";
             ctx.textBaseline = "middle";
             ctx.textAlign = "center";
@@ -238,7 +315,7 @@ function draw() {
                 const msg = messages[i];
                 const elapsed = now - msg.timestamp;
 
-                if (elapsed >= 15000) continue; // Ignora mensagens expiradas
+                if (elapsed >= 15000) continue;
 
                 let opacity = 1;
                 if (elapsed > 10000) {
@@ -251,17 +328,14 @@ function draw() {
                 const text = msg.text;
                 const textWidth = ctx.measureText(text).width;
 
-                // Posicionamento arredondado para melhor nitidez
-                const x = Math.round(p.x_img + frameWidth / 2);
-                const y = Math.round(p.y_img - 10 - yOffset);
+                const x = Math.round(dx + destW / 2);
+                const y = Math.round(dy - 10 - yOffset);
 
-                // Fundo arredondado do balão
                 ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
                 ctx.beginPath();
                 ctx.roundRect(x - textWidth / 2 - 6, y - 10, textWidth + 12, 20, 6);
                 ctx.fill();
 
-                // Texto da mensagem
                 ctx.fillStyle = "white";
                 ctx.fillText(text, x, y);
 

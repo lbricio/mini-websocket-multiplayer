@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -19,9 +20,9 @@ var (
 	}
 )
 
-const (
-	mapWidth  = 24
-	mapHeight = 16
+var (
+	mapWidth  int
+	mapHeight int
 )
 
 type ChatMessage struct {
@@ -38,6 +39,26 @@ type Player struct {
 	IsMoving       bool          `json:"-"`
 	NextMove       string        `json:"-"`
 	ChatMessages   []ChatMessage `json:"chatMessages"`
+}
+
+type MapData struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+func loadMapDimensions(path string) (int, int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+
+	var mapData MapData
+	if err := json.NewDecoder(file).Decode(&mapData); err != nil {
+		return 0, 0, err
+	}
+
+	return mapData.Width, mapData.Height, nil
 }
 
 func handleWS(w http.ResponseWriter, r *http.Request) {
@@ -237,11 +258,17 @@ func broadcastChat(senderID int, text string) {
 }
 
 func main() {
+	var err error
+	mapWidth, mapHeight, err = loadMapDimensions("maps/test.json")
+	if err != nil {
+		log.Fatalf("Erro ao carregar mapa: %v", err)
+	}
+
 	http.HandleFunc("/ws", handleWS)
 	http.Handle("/", http.FileServer(http.Dir("./")))
 
 	go broadcastLoop()
 
-	log.Println("Servidor rodando em http://localhost:8080")
+	log.Printf("Servidor rodando em http://localhost:8080 (mapa: %dx%d)\n", mapWidth, mapHeight)
 	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
 }
