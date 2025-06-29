@@ -10,7 +10,7 @@
     <!-- <canvas id="game" width="1280" height="720"></canvas> -->
     <canvas id="game" width="1024" height="640"></canvas>
     <!-- <canvas id="game" width="768" height="432"></canvas> -->
-    <input type="text" id="chatInput" placeholder="Digite sua mensagem e aperte Enter...">
+    <input type="text" id="chatInput" placeholder="Digite sua mensagem e aperte Enter..." maxlength="60">
 </div>
 <!-- Joystick no canto inferior esquerdo -->
 <div class="joystick-overlay">
@@ -163,7 +163,8 @@ ws.onmessage = function(event) {
 
 document.getElementById('chatInput').addEventListener('keydown', function(event) {
     if (event.key === 'Enter' && this.value.trim() !== '') {
-        ws.send(JSON.stringify({ type: 'chat', text: this.value.trim() }));
+        const msg = this.value.trim().slice(0, 60);
+        ws.send(JSON.stringify({ type: 'chat', text: msg }));
         this.value = '';
     }
 });
@@ -182,8 +183,27 @@ directionsInput.forEach(dir => {
 
 const keysPressed = {};
 
+const chatInput = document.getElementById('chatInput');
+
 document.addEventListener('keydown', function(event) {
-    if (document.activeElement.id === 'chatInput') return;
+    // Se foco estiver no chatInput, ignorar controle de movimento
+    if (document.activeElement.id === 'chatInput') {
+        // Tratamento para desfocar com Tab enquanto está no input
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            chatInput.blur();
+        }
+        return;
+    }
+
+    // Se não estiver no chatInput
+    if (event.key === 'Tab') {
+        event.preventDefault();
+        chatInput.focus();
+        return;
+    }
+
+    // Controla teclas de movimento
     keysPressed[event.key.toLowerCase()] = true;
 });
 
@@ -197,6 +217,15 @@ setInterval(function() {
     if (keysPressed['a']) sendMove('left');
     if (keysPressed['d']) sendMove('right');
 }, 50);
+
+chatInput.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter' && this.value.trim() !== '') {
+        const msg = this.value.trim().slice(0, 60);
+        ws.send(JSON.stringify({ type: 'chat', text: msg }));
+        this.value = '';
+        this.blur(); // desfocar após enviar
+    }
+});
 
 
 function lerp(a, b, t) {
@@ -307,7 +336,7 @@ function draw() {
             const messages = p.chatMessages.slice(-3);
             let yOffset = 0;
 
-            ctx.font = "14px 'PixelMplus'";
+            ctx.font = "16px 'PixelMplus'";
             ctx.textBaseline = "middle";
             ctx.textAlign = "center";
 
